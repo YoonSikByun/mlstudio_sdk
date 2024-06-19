@@ -1,8 +1,9 @@
 import os
+import mlflow
 from mlflow import MlflowClient
 from mlflow.server import get_app_client
 import psycopg2
-from mlstudio_sdk.common import Config
+from mlstudio_sdk.config import Config
 
 config = Config()
 
