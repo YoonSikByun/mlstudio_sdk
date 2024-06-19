@@ -1,4 +1,4 @@
-import jsons
+import json
 from mlstudio_sdk.common import SingletonType
 
 config_path = '/opt/mlstudio/config/mlstudio-config.json'
@@ -10,7 +10,7 @@ class Config(object, metaclass=SingletonType) :
 
     def load(self) :
         with open(config_path, 'r') as f :
-            self.config = jsons.loads(f.read())
+            self.config = json.loads(f.read())
 
     def get_mlflow_tracking_uri(self) :
         ip = self.config['db']['cluster']['ip']
