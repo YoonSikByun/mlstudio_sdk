@@ -1,15 +1,18 @@
+import os
 import json
 from mlstudio_sdk.common import SingletonType
-
-config_path = '/opt/mlstudio/config/mlstudio-config.json'
 
 class Config(object, metaclass=SingletonType) :
     def __init__(self):
         self.config = None
+        self.config_path = '/opt/mlstudio/config/'
+        if 'CONF_PATH' in os.environ:
+            self.config_path = os.environ['CONF_PATH']        
+        self.config_path = os.path.join(self.config_path, 'mlstudio-config.json')
         self.load()
 
     def load(self) :
-        with open(config_path, 'r') as f :
+        with open(self.config_path, 'r') as f :
             self.config = json.loads(f.read())
 
     def get_mlflow_tracking_uri(self) :

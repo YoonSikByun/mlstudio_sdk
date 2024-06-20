@@ -252,6 +252,32 @@ def get_all_experiments(login_id, login_pwd) :
     client = MlflowClient(tracking_uri=config.get_mlflow_tracking_uri())
     return client.search_experiments()
 
+########################################
+# MLFlosw Dabase 직접 접근
+########################################
+# 관리자인지 확인
+def get_is_admin(user_name) :
+    #establishing the connection
+    conn = psycopg2.connect(config.get_mlflow_tracking_auth_uri())
+
+    sql = f"""
+    SELECT  is_admin
+    FROM    users
+    WHERE   username='{user_name}'
+    """
+
+    cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cursor.execute(sql)
+    r = cursor.fetchone()
+    if not r : return False
+    
+    #Closing the connection
+    conn.close()
+    
+    if 'is_admin' in r :
+        return r['is_admin']
+    return False
+
 def update_artifact_location(experiment_id, artifact_location) :
     #establishing the connection
     conn = psycopg2.connect(
@@ -279,6 +305,155 @@ def update_artifact_location(experiment_id, artifact_location) :
     
     #Closing the connection
     conn.close()
+
+# 접근권한을 가지고 있는 experiment id 조회
+def get_experiment_permissions(user_name) :
+    #establishing the connection
+    conn = psycopg2.connect(config.get_mlflow_tracking_auth_uri())
+    
+    sql = f"""
+    SELECT  experiment_id,
+        user_id,
+        permission
+    FROM   experiment_permissions experiments
+    INNER JOIN (
+        SELECT  id
+        FROM    users
+        WHERE   username='{user_name}'
+    ) users
+    ON experiments.user_id = users.id
+    """
+
+    cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cursor.execute(sql)
+    records = cursor.fetchall()
+    
+    rtn = []
+    for r in records:
+        rtn.append(dict(r))
+
+    conn.close()
+    
+    return rtn
+
+# 접근권한을 가지고 있는 experiment 전체정보 조회
+def get_experiments_by_permission(user_name) :
+    
+    is_admin = get_is_admin(user_name)
+    
+    if not is_admin :
+        permissions = get_experiment_permissions(user_name)
+
+        if len(permissions) < 1:
+            return []
+
+        exps=[]
+        for p in permissions:
+            exps.append(p['experiment_id'])
+
+        exps = ', '.join(map(str,exps))
+
+        sql = f"""
+            SELECT *
+            FROM experiments
+            WHERE experiment_id In ({exps});
+            """
+    else:
+        sql = """
+            SELECT *
+            FROM experiments
+            """
+        
+    conn = psycopg2.connect(config.get_mlflow_tracking_uri())
+    cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cursor.execute(sql)
+
+    recoreds = cursor.fetchall()
+
+    rtn = []
+    for row in recoreds:
+        rtn.append(dict(row))
+
+    conn.close()
+
+    return rtn
+
+# 사용자 registered model 권한 조회
+def get_registered_model_permissions(user_name) :
+    #establishing the connection
+    conn = psycopg2.connect(config.get_mlflow_tracking_auth_uri())
+    
+    sql = f"""
+    SELECT  registered.id as registered_id,
+            name,
+            user_id,
+            permission
+    FROM   registered_model_permissions registered
+    INNER  JOIN (
+        SELECT  id
+        FROM    users
+        WHERE   username='{user_name}'
+    ) users
+    ON registered.user_id = users.id
+    """
+
+    cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cursor.execute(sql)
+    records = cursor.fetchall()
+    
+    rtn = []
+    for r in records:
+        rtn.append(dict(r))
+
+    #Closing the connection
+    conn.close()
+
+    return rtn
+
+# 사용자 권한으로 볼 수 있는 registered model 조회
+def get_registered_model_by_permission(user_name) :
+    
+    is_admin = get_is_admin(user_name)
+    
+    if not is_admin :
+        permissions = get_registered_model_permissions(user_name)
+        print(permissions)
+        if len(permissions) < 1:
+            return None
+
+        exps=''
+
+        for p in permissions:
+            name = p['name']
+            if exps :
+                exps = exps + f", '{name}'"
+            else:
+                exps = f"'{name}'"
+
+        sql = f"""
+        SELECT DISTINCT name
+        FROM model_versions
+        WHERE name In ({exps});
+        """
+    else:
+        sql = f"""
+        SELECT DISTINCT name
+        FROM model_versions
+        """
+
+    conn = psycopg2.connect(config.get_mlflow_tracking_uri())
+    cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cursor.execute(sql)
+
+    recoreds = cursor.fetchall()
+
+    rtn = []
+    for row in recoreds:
+        rtn.append(dict(row))
+
+    conn.close()
+
+    return rtn
 
 if __name__ == "__main__":
     login_id='tes1'
